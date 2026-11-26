@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Refresh the casks from the latest stable upstream releases.
 
-Fermata publishes Fermata-<version>.dmg and a rolling Fermata.dmg; exDesktop
+Fermata publishes fermata-<version>-macos-universal.dmg and a rolling fermata.dmg; exDesktop
 publishes separate arm64 and x64 DMGs for both its stable and pre-release
 channels. The GitHub release API already carries
 a sha256 digest for each asset, so the common path needs no download.
@@ -76,7 +76,7 @@ def write(path: Path, text: str) -> bool:
 
 def fermata_cask(release: dict) -> str | None:
     version = version_of(release)
-    item = asset(release, f"Fermata-{version}.dmg")
+    item = asset(release, f"fermata-{version}-macos-universal.dmg")
     if item is None:
         return None
     checksum = digest(item)
@@ -84,7 +84,7 @@ def fermata_cask(release: dict) -> str | None:
   version "{version}"
   sha256 "{checksum}"
 
-  url "https://github.com/gythialy/fermata/releases/download/v#{{version}}/Fermata-#{{version}}.dmg"
+  url "https://github.com/gythialy/fermata/releases/download/v#{{version}}/fermata-#{{version}}-macos-universal.dmg"
   name "Fermata"
   desc "Menu bar break reminder"
   homepage "https://github.com/gythialy/fermata"
