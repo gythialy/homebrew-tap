@@ -1,6 +1,6 @@
 cask "fermata" do
-  version "1.1.1"
-  sha256 "dd259ced3e6d5466246188e27ce000d39506996427f6b69c824052e3b050402f"
+  version "1.1.2"
+  sha256 "e8faba77ab67dc2f22c879cff6d04c8a1a131d5fc6105f50ade851ce8f99c773"
 
   url "https://github.com/gythialy/fermata/releases/download/v#{version}/fermata-#{version}-macos-universal.dmg"
   name "Fermata"
