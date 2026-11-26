@@ -1,8 +1,8 @@
 cask "fermata" do
-  version :latest
-  sha256 :no_check
+  version "1.0.0"
+  sha256 "7cd9cb1376994bcd5bd4f564dd0b5e9af3837c9d1b51439b681acccd4888f036"
 
-  url "https://github.com/gythialy/fermata/releases/latest/download/Fermata.dmg"
+  url "https://github.com/gythialy/fermata/releases/download/v#{version}/Fermata-#{version}.dmg"
   name "Fermata"
   desc "Menu bar break reminder"
   homepage "https://github.com/gythialy/fermata"
