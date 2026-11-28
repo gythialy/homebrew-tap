@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Refresh the casks from the latest stable upstream releases.
+"""Refresh the configured casks from their latest GitHub releases.
 
-Fermata publishes fermata-<version>-macos-universal.dmg and a rolling fermata.dmg; exDesktop
-publishes separate arm64 and x64 DMGs for both its stable and pre-release
-channels. The GitHub release API already carries
-a sha256 digest for each asset, so the common path needs no download.
+casks.toml holds each cask's repository, release channel, asset names and
+metadata. The GitHub release API already carries a sha256 digest for each
+asset, so the common path needs no download.
 """
 
 from __future__ import annotations
@@ -13,6 +12,7 @@ import hashlib
 import json
 import os
 import sys
+import tomllib
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -52,16 +52,16 @@ def latest_prerelease(repo: str) -> dict | None:
     )
 
 
-def version_of(release: dict) -> str:
+def version_of(release: dict, prefix: str = "v") -> str:
     tag = release["tag_name"]
-    return tag[1:] if tag.startswith("v") else tag
+    return tag.removeprefix(prefix) if prefix else tag
 
 
-def digest(asset: dict) -> str:
-    value = (asset.get("digest") or "").strip()
+def digest(asset_item: dict) -> str:
+    value = (asset_item.get("digest") or "").strip()
     if value.startswith("sha256:"):
         return value.removeprefix("sha256:")
-    data = fetch(asset["browser_download_url"])
+    data = fetch(asset_item["browser_download_url"])
     return hashlib.sha256(data).hexdigest()
 
 
@@ -76,181 +76,100 @@ def write(path: Path, text: str) -> bool:
     return True
 
 
-def fermata_cask(release: dict) -> str | None:
-    version = version_of(release)
-    item = asset(release, f"fermata-{version}-macos-universal.dmg")
-    if item is None:
-        return None
-    checksum = digest(item)
-    return f'''cask "fermata" do
-  version "{version}"
-  sha256 "{checksum}"
-
-  url "https://github.com/gythialy/fermata/releases/download/v#{{version}}/fermata-#{{version}}-macos-universal.dmg"
-  name "Fermata"
-  desc "Menu bar break reminder"
-  homepage "https://github.com/gythialy/fermata"
-
-  depends_on macos: :ventura
-
-  app "Fermata.app"
-
-  postflight_steps do
-    run "/usr/bin/xattr",
-        args:         ["-dr", "com.apple.quarantine", "{{{{appdir}}}}/Fermata.app"],
-        must_succeed: false
-  end
-
-  zap trash: [
-    "~/Library/Application Support/Fermata",
-    "~/Library/Logs/Fermata",
-    "~/Library/Preferences/breaktime.plist",
-    "~/Library/Preferences/dev.gythialy.breaktime.plist",
-    "~/Library/Preferences/dev.gythialy.fermata.plist",
-  ]
-
-  caveats <<~EOS
-    Fermata is ad-hoc signed, not notarized. This cask clears the download
-    quarantine; if macOS still blocks it, right-click the app and choose Open,
-    or allow it in System Settings -> Privacy & Security.
-  EOS
-end
-'''
+def ruby_url(template: str) -> str:
+    return template.replace("{version}", "#{version}")
 
 
-def exdesktop_cask(release: dict) -> str:
-    version = version_of(release)
-    arm = asset(release, f"exDesktop-macos-arm64.{version}.dmg")
-    intel = asset(release, f"exDesktop-macos-x64.{version}.dmg")
-    if arm is None or intel is None:
-        raise SystemExit(f"exDesktop {version} is missing a macOS DMG")
+def render(cask: dict, release: dict) -> str | None:
+    token = cask["token"]
+    version = version_of(release, cask.get("tag_prefix", "v"))
+    assets = cask["asset"]
+    urls = cask["url"]
+    keys = ["universal"] if "universal" in assets else ["arm", "intel"]
+    checksums = {}
+    for key in keys:
+        name = assets[key].format(version=version)
+        item = asset(release, name)
+        if item is None:
+            if cask.get("on_missing_asset") == "skip":
+                return None
+            raise SystemExit(f"{token} {version} is missing {name}")
+        checksums[key] = digest(item)
 
-    return f'''cask "ex-desktop" do
-  version "{version}"
+    lines = [f'cask "{token}" do', f'  version "{version}"']
+    if keys == ["universal"]:
+        lines += [
+            f'  sha256 "{checksums["universal"]}"',
+            "",
+            f'  url "{ruby_url(urls["universal"])}"',
+        ]
+    else:
+        lines.append("")
+        for key in keys:
+            lines += [
+                f"  on_{key} do",
+                f'    sha256 "{checksums[key]}"',
+                "",
+                f'    url "{ruby_url(urls[key])}"',
+                "  end",
+            ]
+        lines.append("")
 
-  on_arm do
-    sha256 "{digest(arm)}"
-
-    url "https://github.com/metawka/exDesktop/releases/download/v#{{version}}/exDesktop-macos-arm64.#{{version}}.dmg"
-  end
-  on_intel do
-    sha256 "{digest(intel)}"
-
-    url "https://github.com/metawka/exDesktop/releases/download/v#{{version}}/exDesktop-macos-x64.#{{version}}.dmg"
-  end
-
-  name "exDesktop"
-  desc "Telegram Desktop client with extended customisation"
-  homepage "https://github.com/metawka/exDesktop"
-
-  auto_updates true
-  conflicts_with cask: "ex-desktop@beta"
-  depends_on :macos
-
-  app "exDesktop.app"
-
-  postflight_steps do
-    run "/usr/bin/xattr",
-        args:         ["-dr", "com.apple.quarantine", "{{{{appdir}}}}/exDesktop.app"],
-        must_succeed: false
-  end
-
-  zap trash: [
-    "~/Library/Application Support/exDesktop",
-    "~/Library/Preferences/com.tdesktop.Telegram.plist",
-    "~/Library/Saved Application State/com.tdesktop.Telegram.savedState",
-  ]
-
-  caveats <<~EOS
-    exDesktop is built and signed by its upstream project, not by Homebrew or
-    Fermata. This cask clears the download quarantine; if macOS still blocks
-    it, right-click the app and choose Open.
-  EOS
-end
-'''
+    lines += [
+        f'  name "{cask["name"]}"',
+        f'  desc "{cask["desc"]}"',
+        f'  homepage "{cask["homepage"]}"',
+        "",
+    ]
+    if cask.get("auto_updates"):
+        lines.append("  auto_updates true")
+    if cask.get("conflicts_with"):
+        lines.append(f'  conflicts_with cask: "{cask["conflicts_with"]}"')
+    lines += [f"  depends_on {cask['depends_on']}", "", f'  app "{cask["app"]}"', ""]
+    if cask.get("clear_quarantine"):
+        lines += [
+            "  postflight_steps do",
+            '    run "/usr/bin/xattr",',
+            f'        args:         ["-dr", "com.apple.quarantine", "{{{{appdir}}}}/{cask["app"]}"],',
+            "        must_succeed: false",
+            "  end",
+            "",
+        ]
+    lines += ["  zap trash: ["]
+    lines += [f'    "{path}",' for path in cask["zap"]]
+    lines += ["  ]", "", "  caveats <<~EOS"]
+    lines += [f"    {line}" for line in cask["caveats"]]
+    lines += ["  EOS", "end", ""]
+    return "\n".join(lines)
 
 
-def exdesktop_beta_cask(release: dict) -> str | None:
-    version = version_of(release)
-    arm = asset(release, f"exDesktop-macos-arm64.{version}.dmg")
-    intel = asset(release, f"exDesktop-macos-x64.{version}.dmg")
-    if arm is None or intel is None:
-        return None
-
-    return f'''cask "ex-desktop@beta" do
-  version "{version}"
-
-  on_arm do
-    sha256 "{digest(arm)}"
-
-    url "https://github.com/metawka/exDesktop/releases/download/v#{{version}}/exDesktop-macos-arm64.#{{version}}.dmg"
-  end
-  on_intel do
-    sha256 "{digest(intel)}"
-
-    url "https://github.com/metawka/exDesktop/releases/download/v#{{version}}/exDesktop-macos-x64.#{{version}}.dmg"
-  end
-
-  name "exDesktop"
-  desc "Telegram Desktop client with extended customisation"
-  homepage "https://github.com/metawka/exDesktop"
-
-  auto_updates true
-  conflicts_with cask: "ex-desktop"
-  depends_on :macos
-
-  app "exDesktop.app"
-
-  postflight_steps do
-    run "/usr/bin/xattr",
-        args:         ["-dr", "com.apple.quarantine", "{{{{appdir}}}}/exDesktop.app"],
-        must_succeed: false
-  end
-
-  zap trash: [
-    "~/Library/Application Support/exDesktop",
-    "~/Library/Preferences/com.tdesktop.Telegram.plist",
-    "~/Library/Saved Application State/com.tdesktop.Telegram.savedState",
-  ]
-
-  caveats <<~EOS
-    This is the upstream pre-release channel of exDesktop. Installing it
-    replaces the stable ex-desktop cask; both share the same app bundle and
-    data directory.
-  EOS
-end
-'''
+def release_for(cask: dict) -> dict | None:
+    if cask.get("channel") == "prerelease":
+        return latest_prerelease(cask["repo"])
+    return latest(cask["repo"])
 
 
 def main() -> int:
     CASKS.mkdir(exist_ok=True)
+    with (ROOT / "casks.toml").open("rb") as config_file:
+        casks = tomllib.load(config_file)["cask"]
+
     changed = []
-
-    fermata = latest("gythialy/fermata")
-    if fermata is not None:
-        cask = fermata_cask(fermata)
-        if cask is not None and write(CASKS / "fermata.rb", cask):
-            changed.append("fermata")
-    else:
-        print("fermata: no stable release yet, leaving the cask alone")
-
-    exdesktop = latest("metawka/exDesktop")
-    if exdesktop is None:
-        raise SystemExit("exDesktop has no stable release")
-    if write(CASKS / "ex-desktop.rb", exdesktop_cask(exdesktop)):
-        changed.append("ex-desktop")
-
-    beta = latest_prerelease("metawka/exDesktop")
-    if beta is None:
-        print("ex-desktop@beta: no pre-release yet, leaving the cask alone")
-    else:
-        cask = exdesktop_beta_cask(beta)
-        if cask is None:
-            print(
-                "ex-desktop@beta: pre-release is missing a macOS DMG, leaving the cask alone"
-            )
-        elif write(CASKS / "ex-desktop@beta.rb", cask):
-            changed.append("ex-desktop@beta")
+    for cask in casks:
+        token = cask["token"]
+        channel = cask.get("channel", "latest")
+        release = release_for(cask)
+        if release is None:
+            if cask.get("required"):
+                raise SystemExit(f"{token} has no {channel} release")
+            print(f"{token}: no {channel} release yet, leaving the cask alone")
+            continue
+        cask_text = render(cask, release)
+        if cask_text is None:
+            print(f"{token}: release is missing a macOS asset, leaving the cask alone")
+            continue
+        if write(CASKS / f"{token}.rb", cask_text):
+            changed.append(token)
 
     print("updated: " + (", ".join(changed) if changed else "nothing"))
     return 0
