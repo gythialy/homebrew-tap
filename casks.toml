@@ -1,0 +1,99 @@
+# Release sources for every cask in this tap.
+# scripts/update.py renders Casks/<token>.rb from these entries.
+
+[[cask]]
+token = "fermata"
+repo = "gythialy/fermata"
+channel = "latest"
+required = false
+on_missing_asset = "skip"
+name = "Fermata"
+desc = "Menu bar break reminder"
+homepage = "https://github.com/gythialy/fermata"
+app = "Fermata.app"
+depends_on = "macos: :ventura"
+clear_quarantine = true
+zap = [
+  "~/Library/Application Support/Fermata",
+  "~/Library/Logs/Fermata",
+  "~/Library/Preferences/breaktime.plist",
+  "~/Library/Preferences/dev.gythialy.breaktime.plist",
+  "~/Library/Preferences/dev.gythialy.fermata.plist",
+]
+caveats = [
+  "Fermata is ad-hoc signed, not notarized. This cask clears the download",
+  "quarantine; if macOS still blocks it, right-click the app and choose Open,",
+  "or allow it in System Settings -> Privacy & Security.",
+]
+
+[cask.asset]
+universal = "fermata-{version}-macos-universal.dmg"
+
+[cask.url]
+universal = "https://github.com/gythialy/fermata/releases/download/v{version}/fermata-{version}-macos-universal.dmg"
+
+[[cask]]
+token = "ex-desktop"
+repo = "metawka/exDesktop"
+channel = "latest"
+required = true
+on_missing_asset = "error"
+name = "exDesktop"
+desc = "Telegram Desktop client with extended customisation"
+homepage = "https://github.com/metawka/exDesktop"
+app = "exDesktop.app"
+depends_on = ":macos"
+auto_updates = true
+conflicts_with = "ex-desktop@beta"
+clear_quarantine = true
+zap = [
+  "~/Library/Application Support/exDesktop",
+  "~/Library/Preferences/com.tdesktop.Telegram.plist",
+  "~/Library/Saved Application State/com.tdesktop.Telegram.savedState",
+]
+caveats = [
+  "exDesktop is built and signed by its upstream project, not by Homebrew or",
+  "Fermata. This cask clears the download quarantine; if macOS still blocks",
+  "it, right-click the app and choose Open.",
+]
+
+[cask.asset]
+arm = "exDesktop-macos-arm64.{version}.dmg"
+intel = "exDesktop-macos-x64.{version}.dmg"
+
+[cask.url]
+arm = "https://github.com/metawka/exDesktop/releases/download/v{version}/exDesktop-macos-arm64.{version}.dmg"
+intel = "https://github.com/metawka/exDesktop/releases/download/v{version}/exDesktop-macos-x64.{version}.dmg"
+
+[[cask]]
+token = "ex-desktop@beta"
+repo = "metawka/exDesktop"
+channel = "prerelease"
+required = false
+on_missing_asset = "skip"
+name = "exDesktop"
+desc = "Telegram Desktop client with extended customisation"
+homepage = "https://github.com/metawka/exDesktop"
+app = "exDesktop.app"
+depends_on = ":macos"
+auto_updates = true
+conflicts_with = "ex-desktop"
+clear_quarantine = true
+zap = [
+  "~/Library/Application Support/exDesktop",
+  "~/Library/Preferences/com.tdesktop.Telegram.plist",
+  "~/Library/Saved Application State/com.tdesktop.Telegram.savedState",
+]
+caveats = [
+  "This is the upstream pre-release channel of exDesktop. Installing it",
+  "replaces the stable ex-desktop cask; both share the same app bundle and",
+  "data directory.",
+]
+
+[cask.asset]
+arm = "exDesktop-macos-arm64.{version}.dmg"
+intel = "exDesktop-macos-x64.{version}.dmg"
+
+[cask.url]
+arm = "https://github.com/metawka/exDesktop/releases/download/v{version}/exDesktop-macos-arm64.{version}.dmg"
+intel = "https://github.com/metawka/exDesktop/releases/download/v{version}/exDesktop-macos-x64.{version}.dmg"
