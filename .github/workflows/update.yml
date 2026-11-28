@@ -43,14 +43,40 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$branch"
           git add Casks
-          git commit -m "Update casks"
+          title=$(python3 - <<'PY'
+          import re
+          import subprocess
+          from pathlib import Path
+
+          files = subprocess.check_output(
+              ["git", "diff", "--cached", "--name-only", "--", "Casks"],
+              text=True,
+          ).splitlines()
+          updates = []
+          for name in files:
+              path = Path(name)
+              match = re.search(r'^  version "([^"]+)"$', path.read_text(), re.MULTILINE)
+              updates.append((path.stem, match.group(1) if match else None))
+
+          if len(updates) == 1:
+              token, version = updates[0]
+              print(f"Update {token} cask to {version}" if version else f"Update {token} cask")
+          elif updates:
+              tokens = ", ".join(token for token, _ in updates)
+              print(f"Update {tokens} casks")
+          else:
+              print("Update casks")
+          PY
+          )
+          git commit -m "$title"
           git push --force origin "$branch"
           state=$(gh pr view "$branch" --json state -q .state 2>/dev/null || true)
+          body="Automated cask refresh from upstream releases."
           if [ "$state" = OPEN ]; then
-            echo "update PR already open"
+            gh pr edit "$branch" --title "$title" --body "$body"
           else
             gh pr create --base main --head "$branch" \
-              --title "Update casks" \
-              --body "Automated cask refresh from upstream releases."
+              --title "$title" \
+              --body "$body"
           fi
           gh pr merge --auto --squash "$branch"
