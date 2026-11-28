@@ -5,16 +5,22 @@ on:
     - cron: "41 3 * * *"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.12"
 
@@ -23,15 +29,28 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/update.py
 
-      - name: Commit and push
+      - name: Open or refresh the update PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
-          if git diff --quiet; then
+          if git diff --quiet -- Casks; then
             echo "casks are current"
             exit 0
           fi
+          branch="chore/update-casks"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
           git add Casks
           git commit -m "Update casks"
-          git push
+          git push --force origin "$branch"
+          state=$(gh pr view "$branch" --json state -q .state 2>/dev/null || true)
+          if [ "$state" = OPEN ]; then
+            echo "update PR already open"
+          else
+            gh pr create --base main --head "$branch" \
+              --title "Update casks" \
+              --body "Automated cask refresh from upstream releases."
+          fi
+          gh pr merge --auto --squash "$branch"

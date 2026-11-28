@@ -47,7 +47,9 @@ def latest_prerelease(repo: str) -> dict | None:
         if error.code == 404:
             return None
         raise
-    return next((r for r in releases if r.get("prerelease") and not r.get("draft")), None)
+    return next(
+        (r for r in releases if r.get("prerelease") and not r.get("draft")), None
+    )
 
 
 def version_of(release: dict) -> str:
@@ -244,7 +246,9 @@ def main() -> int:
     else:
         cask = exdesktop_beta_cask(beta)
         if cask is None:
-            print("ex-desktop@beta: pre-release is missing a macOS DMG, leaving the cask alone")
+            print(
+                "ex-desktop@beta: pre-release is missing a macOS DMG, leaving the cask alone"
+            )
         elif write(CASKS / "ex-desktop@beta.rb", cask):
             changed.append("ex-desktop@beta")
 

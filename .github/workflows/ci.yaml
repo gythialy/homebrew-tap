@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: python3 -m pip install ruff==0.17.6
+
+      - name: Format check
+        run: ruff format --check scripts/update.py
+
+      - name: Lint
+        run: ruff check scripts/update.py
+
+      - name: Python syntax
+        run: python3 -m py_compile scripts/update.py
+
+      - name: Cask syntax
+        run: |
+          for file in Casks/*.rb; do
+            ruby -c "$file"
+          done
